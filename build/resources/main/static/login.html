@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>電商購物中心｜登入</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        padding: 24px;
+        display: grid;
+        place-items: center;
+        min-height: 100vh;
+        background: #f7f7f9;
+      }
+      .card {
+        width: 100%;
+        max-width: 420px;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
+      }
+      h1 {
+        margin: 0 0 16px 0;
+        font-size: 22px;
+      }
+      label {
+        display: block;
+        font-size: 14px;
+        color: #444;
+        margin: 8px 0 4px;
+      }
+      input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+      }
+      button {
+        margin-top: 16px;
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid #2563eb;
+        background: #2563eb;
+        color: #fff;
+        cursor: pointer;
+      }
+      .muted {
+        color: #6b7280;
+        font-size: 12px;
+        margin-top: 8px;
+        text-align: center;
+      }
+      .danger {
+        color: #b00020;
+        font-size: 13px;
+        margin-top: 8px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>登入</h1>
+      <label>帳號</label>
+      <input id="username" />
+      <label>密碼</label>
+      <input id="password" type="password" />
+      <button onclick="login()">登入</button>
+      <div id="msg" class="muted">
+        提示：demo 帳密可用 admin/admin123，或 customer/cust123
+      </div>
+    </div>
+
+    <script>
+      async function login() {
+        const u = document.getElementById("username").value.trim();
+        const p = document.getElementById("password").value.trim();
+        const msg = document.getElementById("msg");
+        msg.className = "muted";
+        msg.textContent = "登入中…";
+
+        try {
+          const res = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: u, password: p }),
+            credentials: "same-origin",
+          });
+          if (!res.ok) {
+            const t = await res.text().catch(() => "");
+            throw new Error(t || "登入失敗");
+          }
+          const data = await res.json(); // {role: 'ADMIN'|'CUSTOMER'}
+          if (data.role === "ADMIN") {
+            window.location.href = "/admin.html";
+          } else {
+            window.location.href = "/customer.html";
+          }
+        } catch (err) {
+          msg.className = "danger";
+          msg.textContent = "❌ " + (err.message || "登入失敗");
+        }
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>電商購物中心｜顧客</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        padding: 24px;
+      }
+      table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+      th, td { border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: middle; }
+      .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+      .card { border: 1px solid #ddd; padding: 16px; border-radius: 10px; margin-top: 16px; }
+      .right { text-align: right; }
+      .muted { color: #666; font-size: 12px; }
+      .danger { color: #b00020; }
+      .ok { color: #0a7f2e; }
+      button { padding: 8px 12px; border-radius: 8px; border: 1px solid #ccc; background: #f7f7f7; cursor: pointer; }
+      button.primary { background: #0d6efd; color: #fff; border-color: #0d6efd; }
+      input.qty { width: 80px; }
+      nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+      .nav-right { display: flex; gap: 8px; align-items: center; }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <div class="nav-right">
+        <span id="who" class="muted"></span>
+        <button onclick="logout()">登出</button>
+      </div>
+    </nav>
+
+    <h1>電商購物中心（顧客）</h1>
+
+    <!-- 商品清單（庫存 > 0；顧客頁不顯示ID與庫存） -->
+    <div class="card">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <h3 style="margin: 0">商品清單</h3>
+        <button onclick="loadProducts()">重新整理</button>
+      </div>
+      <table id="prodTable">
+        <thead>
+          <tr>
+            <th></th>
+            <th>商品名稱</th>
+            <th class="right">售價</th>
+            <th class="right">購買數量</th>
+            <th class="right">小計</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div class="muted">提示：勾選商品後可輸入購買數量；購買數量不得大於庫存。</div>
+    </div>
+
+    <!-- 顧客訂單內容（即時計算；memberId 從登入者取得） -->
+    <div class="card">
+      <h3>顧客訂單內容</h3>
+      <div class="row">
+        <span class="muted">會員編碼：</span>
+        <strong id="memberLabel">（載入中）</strong>
+        <button class="primary" onclick="createOrder()">建立訂單</button>
+      </div>
+      <table id="orderTable" style="display: none">
+        <thead>
+          <tr>
+            <th>商品</th>
+            <th class="right">單價</th>
+            <th class="right">數量</th>
+            <th class="right">小計</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3" class="right"><strong>訂單總金額</strong></td>
+            <td class="right" id="orderTotal">0</td>
+          </tr>
+        </tfoot>
+      </table>
+      <div id="orderMsg" class="muted"></div>
+    </div>
+
+    <script>
+      // 會話中的登入者（從 /api/auth/me 取得）
+      let CURRENT_USER = { role: 'GUEST', user: '' };
+
+      // 驗證登入者角色
+        (async function guard() {
+          try {
+            const res = await fetch("/api/auth/me", { credentials: "same-origin" });
+            const me = await res.json(); // { role, user, userId }
+            CURRENT_USER = me || { role: 'GUEST', user: '', userId: '' };
+
+            if (CURRENT_USER.role !== "CUSTOMER") {
+              location.href = "/login.html";
+              return;
+            }
+
+            document.getElementById("who").textContent = "登入帳號：" + CURRENT_USER.user;
+            document.getElementById("memberLabel").textContent = CURRENT_USER.userId;
+
+            loadProducts();
+          } catch (e) {
+            location.href = "/login.html";
+          }
+        })();
+
+      async function logout() {
+        try {
+          await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+        } catch (e) {}
+        location.href = "/login.html";
+      }
+
+      let products = [];
+      const cart = new Map();
+      const el = (id) => document.getElementById(id);
+      const fmt = (n) => Number(n).toLocaleString("zh-TW");
+      const escapeHtml = (s) =>
+        String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+                 .replaceAll(">", "&gt;").replaceAll('"', "&quot;")
+                 .replaceAll("'", "&#039;");
+
+      function toast(msg, ok = false) {
+        const box = el("orderMsg");
+        box.textContent = msg;
+        box.className = ok ? "ok" : "danger";
+        setTimeout(() => { box.textContent = ""; box.className = "muted"; }, 2500);
+      }
+
+      async function loadProducts() {
+        const tbody = document.querySelector("#prodTable tbody");
+        tbody.innerHTML = '<tr><td colspan="5">載入中…</td></tr>';
+        cart.clear();
+        renderOrderSummary();
+
+        try {
+          const res = await fetch("/api/products/available", { credentials: "same-origin" });
+          if (!res.ok) throw new Error("讀取商品清單失敗");
+          products = await res.json();
+
+          tbody.innerHTML = "";
+          if (!Array.isArray(products) || products.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5">目前無可售商品</td></tr>';
+            return;
+          }
+
+          for (const p of products) {
+            const tr = document.createElement("tr");
+            const checked = cart.has(p.productId);
+            const qty = checked ? cart.get(p.productId).qty : 0;
+
+            tr.innerHTML = `
+              <td><input type="checkbox" data-id="${p.productId}" ${checked ? "checked" : ""}></td>
+              <td>${escapeHtml(p.productName)}</td>
+              <td class="right">${fmt(p.price)}</td>
+              <td class="right">
+                <input class="qty" type="number" min="0" max="${p.quantity}" step="1"
+                       data-qty="${p.productId}" value="${qty}" ${checked ? "" : "disabled"}>
+              </td>
+              <td class="right" data-sub="${p.productId}">${checked ? fmt(p.price * qty) : "0"}</td>
+            `;
+
+            // 勾選切換
+            tr.querySelector('input[type="checkbox"]').addEventListener("change", (e) => {
+              const id = e.target.getAttribute("data-id");
+              const rowQty = tr.querySelector(`input[data-qty="${id}"]`);
+              if (e.target.checked) {
+                rowQty.disabled = false;
+                if (!cart.has(id)) {
+                  cart.set(id, {
+                    productId: p.productId,
+                    productName: p.productName,
+                    price: p.price,
+                    stock: p.quantity,
+                    qty: 1,
+                  });
+                  rowQty.value = 1;
+                }
+              } else {
+                rowQty.disabled = true;
+                rowQty.value = 0;
+                cart.delete(id);
+              }
+              updateRowSubtotal(p.productId);
+              renderOrderSummary();
+            });
+
+            // 數量變更
+            tr.querySelector(`input[data-qty="${p.productId}"]`).addEventListener("input", (e) => {
+              const val = parseInt(e.target.value || "0", 10);
+              const max = parseInt(e.target.getAttribute("max"), 10);
+              if (val < 0) e.target.value = 0;
+              if (val > max) e.target.value = max;
+
+              const qtyNow = parseInt(e.target.value || "0", 10);
+              if (qtyNow === 0) {
+                cart.delete(p.productId);
+                tr.querySelector('input[type="checkbox"]').checked = false;
+                e.target.disabled = true;
+              } else {
+                cart.set(p.productId, {
+                  productId: p.productId,
+                  productName: p.productName,
+                  price: p.price,
+                  stock: p.quantity,
+                  qty: qtyNow,
+                });
+              }
+              updateRowSubtotal(p.productId);
+              renderOrderSummary();
+            });
+
+            tbody.appendChild(tr);
+          }
+        } catch (err) {
+          tbody.innerHTML = `<tr><td colspan="5" class="danger">${escapeHtml(err.message)}</td></tr>`;
+        }
+      }
+
+      function updateRowSubtotal(productId) {
+        const item = cart.get(productId);
+        const td = document.querySelector(`[data-sub="${CSS.escape(productId)}"]`);
+        if (!td) return;
+        td.textContent = item ? fmt(item.price * item.qty) : "0";
+      }
+
+      function renderOrderSummary() {
+        const table = el("orderTable");
+        const tbody = table.querySelector("tbody");
+        tbody.innerHTML = "";
+        let total = 0;
+
+        for (const item of cart.values()) {
+          const sub = item.price * item.qty;
+          total += sub;
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${escapeHtml(item.productName)}</td>
+            <td class="right">${fmt(item.price)}</td>
+            <td class="right">${fmt(item.qty)}</td>
+            <td class="right">${fmt(sub)}</td>
+          `;
+          tbody.appendChild(tr);
+        }
+        el("orderTotal").textContent = fmt(total);
+        table.style.display = cart.size ? "" : "none";
+      }
+
+      async function createOrder() {
+        const memberId = CURRENT_USER.userId;
+        if (cart.size === 0) { toast("請先勾選至少一個商品並設定數量"); return; }
+        for (const x of cart.values()) {
+          if (x.qty > x.stock) { toast(`商品數量超過庫存`); return; }
+        }
+        
+
+        const items = Array.from(cart.values()).map(x => ({
+          productId: x.productId,
+          quantity: x.qty,
+          price: x.price,
+        }));
+        const body = { memberId, items };
+
+        try {
+          const res = await fetch("/api/orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const txt = await res.text().catch(() => "");
+            throw new Error(txt || "建立訂單失敗");
+          }
+          const orderId = await res.text();
+          toast(`✅ 建立成功，OrderID: ${orderId}`, true);
+          cart.clear();
+          renderOrderSummary();
+          await loadProducts();
+        } catch (err) {
+          toast("❌ " + (err.message || "建立訂單失敗"));
+        }
+      }
+    </script>
+  </body>
+</html>

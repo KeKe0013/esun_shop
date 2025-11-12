@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>電商購物中心｜管理員</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        padding: 24px;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      input[type="number"] {
+        width: 120px;
+      }
+      .card {
+        border: 1px solid #ddd;
+        padding: 16px;
+        border-radius: 10px;
+        margin-top: 16px;
+      }
+      .muted {
+        color: #666;
+        font-size: 12px;
+      }
+      .danger {
+        color: #b00020;
+      }
+      .ok {
+        color: #0a7f2e;
+      }
+      button {
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+        background: #f7f7f7;
+        cursor: pointer;
+      }
+      button.primary {
+        background: #0d6efd;
+        color: #fff;
+        border-color: #0d6efd;
+      }
+      nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      .nav-right {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <div class="nav-right">
+        <span id="who" class="muted"></span>
+        <button onclick="logout()">登出</button>
+      </div>
+    </nav>
+
+    <h1>電商購物中心（管理員）</h1>
+
+    <!-- 區塊：新增商品（僅保留此區塊） -->
+    <div class="card">
+      <h3>新增商品</h3>
+      <div class="row">
+        <label>商品編號</label><input id="pId" placeholder="例如 P004" />
+        <label>商品名稱</label
+        ><input id="pName" placeholder="例如 精品咖啡禮盒" /> <label>售價</label
+        ><input id="pPrice" type="number" min="0" step="1" /> <label>庫存</label
+        ><input id="pQty" type="number" min="0" step="1" />
+        <button class="primary" onclick="addProduct()">新增商品</button>
+      </div>
+      <div id="addMsg" class="muted"></div>
+    </div>
+
+    <script>
+      // 角色守門：非 ADMIN 或未登入 → 導回登入頁
+      (async function guard() {
+        try {
+          const res = await fetch("/api/auth/me", {
+            credentials: "same-origin",
+          });
+          const me = await res.json(); // {role:"ADMIN"|"CUSTOMER"|"GUEST"}
+          if (me.role !== "ADMIN") location.href = "/login.html";
+          // 顯示誰在登入（若你有在 session 放 USER）
+          try {
+            const u = me.user || ""; // 若後端未回傳可略過
+            if (u)
+              document.getElementById("who").textContent = "登入帳號：" + u;
+          } catch {}
+        } catch (e) {
+          location.href = "/login.html";
+        }
+      })();
+
+      async function logout() {
+        try {
+          await fetch("/api/auth/logout", {
+            method: "POST",
+            credentials: "same-origin",
+          });
+        } catch (e) {}
+        // 無論是否成功，都導回登入頁
+        location.href = "/login.html";
+      }
+
+      function el(id) {
+        return document.getElementById(id);
+      }
+
+      // 僅保留新增商品功能
+      async function addProduct() {
+        const id = el("pId").value.trim();
+        const name = el("pName").value.trim();
+        const price = parseInt(el("pPrice").value || "0", 10);
+        const qty = parseInt(el("pQty").value || "0", 10);
+        const msg = el("addMsg");
+
+        if (!id || !name) {
+          msg.textContent = "請輸入商品編號與名稱";
+          msg.className = "danger";
+          return;
+        }
+        if (price < 0 || qty < 0) {
+          msg.textContent = "售價與庫存不可為負數";
+          msg.className = "danger";
+          return;
+        }
+
+        try {
+          const res = await fetch("/api/products", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              productId: id,
+              productName: name,
+              price,
+              quantity: qty,
+            }),
+            credentials: "same-origin",
+          });
+          if (!res.ok) throw new Error("新增商品失敗");
+
+          msg.textContent = "✅ 新增成功";
+          msg.className = "ok";
+          el("pId").value = "";
+          el("pName").value = "";
+          el("pPrice").value = "";
+          el("pQty").value = "";
+        } catch (err) {
+          msg.textContent = "❌ " + (err.message || "新增商品失敗");
+          msg.className = "danger";
+        } finally {
+          setTimeout(() => {
+            msg.textContent = "";
+            msg.className = "muted";
+          }, 2500);
+        }
+      }
+    </script>
+  </body>
+</html>
