@@ -195,5 +195,9 @@ POST /api/orders 顧客建立訂單
 | POST   | /api/auth/logout   | 登出           |
 | GET    | /api/auth/me       | 取得登入者資訊 |
 
+## `demo預設使用者帳號`
+管理者：admin/admin123
+顧客：customer/cust123
+
 ```
 
