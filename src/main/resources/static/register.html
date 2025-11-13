@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>電商購物中心｜登入</title>
+    <title>電商購物中心｜註冊</title>
+
     <style>
       body {
         font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
@@ -32,7 +33,8 @@
         color: #444;
         margin: 8px 0 4px;
       }
-      input {
+      input,
+      select {
         width: 100%;
         padding: 10px 12px;
         border: 1px solid #d1d5db;
@@ -68,22 +70,37 @@
         margin-top: 8px;
         text-align: center;
       }
+      .ok {
+        color: #0a7f2e;
+        font-size: 13px;
+        margin-top: 8px;
+        text-align: center;
+      }
     </style>
   </head>
+
   <body>
     <div id="app">
       <div class="card">
-        <h1>登入</h1>
+        <h1>註冊</h1>
 
         <label>帳號</label>
-        <input v-model="username" @keyup.enter="login" />
+        <input v-model="username" />
 
         <label>密碼</label>
-        <input v-model="password" type="password" @keyup.enter="login" />
+        <input v-model="password" type="password" placeholder="長度至少需為6位" />
 
-        <button class="primary" @click="login">登入</button>
+        <label>確認密碼</label>
+        <input v-model="confirmPassword" type="password" />
 
-        <button class="secondary" @click="goRegister">註冊</button>
+        <label>身分</label>
+        <select v-model="role">
+          <option value="CUSTOMER">顧客</option>
+          <option value="ADMIN">管理者</option>
+        </select>
+
+        <button class="primary" @click="register">送出註冊</button>
+        <button class="secondary" @click="goLogin">返回登入</button>
 
         <div :class="msgClass">{{ msg }}</div>
       </div>
@@ -91,6 +108,7 @@
 
     <!-- Vue 3 CDN -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+
     <script>
       const { createApp } = Vue;
 
@@ -99,44 +117,67 @@
           return {
             username: "",
             password: "",
-            msg: "提示：demo 帳密可用 admin/admin123，或 customer/cust123",
+            confirmPassword: "",
+            role: "CUSTOMER",
+            msg: "",
             msgClass: "muted",
           };
         },
+
         methods: {
-          goRegister() {
-            window.location.href = "/register.html";
+          goLogin() {
+            window.location.href = "/login.html";
           },
-          async login() {
-            const u = this.username.trim();
-            const p = this.password.trim();
 
+          async register() {
             this.msgClass = "muted";
-            this.msg = "登入中…";
+            this.msg = "註冊中…";
 
+            // 驗證
+            if (!this.username || !this.password || !this.confirmPassword) {
+              this.msgClass = "danger";
+              this.msg = "帳號與密碼不得為空";
+              return;
+            }
+
+            if (this.password.length < 6) {
+              this.msgClass = "danger";
+              this.msg = "密碼至少需要 6 位字元";
+              return;
+            }
+
+            if (this.password !== this.confirmPassword) {
+              this.msgClass = "danger";
+              this.msg = "兩次輸入的密碼不一致";
+              return;
+            }
+
+            // 呼叫後端 API
             try {
-              const res = await fetch("/api/auth/login", {
+              const res = await fetch("/api/auth/register", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username: u, password: p }),
-                credentials: "same-origin",
+                body: JSON.stringify({
+                  username: this.username,
+                  password: this.password,
+                  role: this.role,
+                }),
               });
 
               if (!res.ok) {
                 const t = await res.text().catch(() => "");
-                throw new Error(t || "登入失敗");
+                throw new Error(t || "註冊失敗");
               }
 
-              const data = await res.json();
+              this.msgClass = "ok";
+              this.msg = "註冊成功！將返回登入頁…";
 
-              if (data.role === "ADMIN") {
-                window.location.href = "/admin.html";
-              } else {
-                window.location.href = "/customer.html";
-              }
+              setTimeout(() => {
+                window.location.href = "/login.html";
+              }, 1500);
             } catch (err) {
               this.msgClass = "danger";
-              this.msg = "❌ " + (err.message || "登入失敗");
+              this.msg = "❌ " + (err.message || "註冊失敗");
             }
           },
         },

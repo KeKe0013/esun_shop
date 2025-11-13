@@ -43,10 +43,18 @@
         width: 100%;
         padding: 10px 12px;
         border-radius: 8px;
+        cursor: pointer;
+      }
+      button.primary {
         border: 1px solid #2563eb;
         background: #2563eb;
         color: #fff;
-        cursor: pointer;
+      }
+      button.secondary {
+        border: 1px solid #bbb;
+        background: #e0e0e0;
+        color: #444;
+        margin-top: 8px;
       }
       .muted {
         color: #6b7280;
@@ -63,48 +71,76 @@
     </style>
   </head>
   <body>
-    <div class="card">
-      <h1>登入</h1>
-      <label>帳號</label>
-      <input id="username" />
-      <label>密碼</label>
-      <input id="password" type="password" />
-      <button onclick="login()">登入</button>
-      <div id="msg" class="muted">
-        提示：demo 帳密可用 admin/admin123，或 customer/cust123
+    <div id="app">
+      <div class="card">
+        <h1>登入</h1>
+
+        <label>帳號</label>
+        <input v-model="username" @keyup.enter="login" />
+
+        <label>密碼</label>
+        <input v-model="password" type="password" @keyup.enter="login" />
+
+        <button class="primary" @click="login">登入</button>
+
+        <button class="secondary" @click="goRegister">註冊</button>
+
+        <div :class="msgClass">{{ msg }}</div>
       </div>
     </div>
 
+    <!-- Vue 3 CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     <script>
-      async function login() {
-        const u = document.getElementById("username").value.trim();
-        const p = document.getElementById("password").value.trim();
-        const msg = document.getElementById("msg");
-        msg.className = "muted";
-        msg.textContent = "登入中…";
+      const { createApp } = Vue;
 
-        try {
-          const res = await fetch("/api/auth/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: u, password: p }),
-            credentials: "same-origin",
-          });
-          if (!res.ok) {
-            const t = await res.text().catch(() => "");
-            throw new Error(t || "登入失敗");
-          }
-          const data = await res.json(); // {role: 'ADMIN'|'CUSTOMER'}
-          if (data.role === "ADMIN") {
-            window.location.href = "/admin.html";
-          } else {
-            window.location.href = "/customer.html";
-          }
-        } catch (err) {
-          msg.className = "danger";
-          msg.textContent = "❌ " + (err.message || "登入失敗");
-        }
-      }
+      createApp({
+        data() {
+          return {
+            username: "",
+            password: "",
+            msg: "提示：demo 帳密可用 admin/admin123，或 customer/cust123",
+            msgClass: "muted",
+          };
+        },
+        methods: {
+          goRegister() {
+            window.location.href = "/register.html";
+          },
+          async login() {
+            const u = this.username.trim();
+            const p = this.password.trim();
+
+            this.msgClass = "muted";
+            this.msg = "登入中…";
+
+            try {
+              const res = await fetch("/api/auth/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username: u, password: p }),
+                credentials: "same-origin",
+              });
+
+              if (!res.ok) {
+                const t = await res.text().catch(() => "");
+                throw new Error(t || "登入失敗");
+              }
+
+              const data = await res.json();
+
+              if (data.role === "ADMIN") {
+                window.location.href = "/admin.html";
+              } else {
+                window.location.href = "/customer.html";
+              }
+            } catch (err) {
+              this.msgClass = "danger";
+              this.msg = "❌ " + (err.message || "登入失敗");
+            }
+          },
+        },
+      }).mount("#app");
     </script>
   </body>
 </html>

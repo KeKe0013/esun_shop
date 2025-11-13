@@ -14,8 +14,8 @@ public class DataInitializer {
             // 預設密碼：admin123 / cust123
             String adminHash = BCrypt.hashpw("admin123", BCrypt.gensalt(10));
             String custHash = BCrypt.hashpw("cust123", BCrypt.gensalt(10));
-            authRepository.createUser("admin", adminHash, "ADMIN");
-            authRepository.createUser("customer", custHash, "CUSTOMER");
+            authRepository.createUser("admin", adminHash, "ADMIN",true);
+            authRepository.createUser("customer", custHash, "CUSTOMER",true);
             System.out.println("[INIT] Seeded default users: admin / customer");
         }
         return new Object();

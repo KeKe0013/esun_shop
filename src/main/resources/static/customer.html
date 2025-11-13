@@ -9,282 +9,391 @@
         font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
         padding: 24px;
       }
-      table { border-collapse: collapse; width: 100%; margin-top: 12px; }
-      th, td { border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: middle; }
-      .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-      .card { border: 1px solid #ddd; padding: 16px; border-radius: 10px; margin-top: 16px; }
-      .right { text-align: right; }
-      .muted { color: #666; font-size: 12px; }
-      .danger { color: #b00020; }
-      .ok { color: #0a7f2e; }
-      button { padding: 8px 12px; border-radius: 8px; border: 1px solid #ccc; background: #f7f7f7; cursor: pointer; }
-      button.primary { background: #0d6efd; color: #fff; border-color: #0d6efd; }
-      input.qty { width: 80px; }
-      nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-      .nav-right { display: flex; gap: 8px; align-items: center; }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 12px;
+      }
+      th,
+      td {
+        border: 1px solid #ccc;
+        padding: 8px;
+        text-align: left;
+        vertical-align: middle;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .card {
+        border: 1px solid #ddd;
+        padding: 16px;
+        border-radius: 10px;
+        margin-top: 16px;
+      }
+      .right {
+        text-align: right;
+      }
+      .muted {
+        color: #666;
+        font-size: 12px;
+      }
+      .danger {
+        color: #b00020;
+      }
+      .ok {
+        color: #0a7f2e;
+      }
+      button {
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+        background: #f7f7f7;
+        cursor: pointer;
+      }
+      button.primary {
+        background: #0d6efd;
+        color: #fff;
+        border-color: #0d6efd;
+      }
+      input.qty {
+        width: 80px;
+      }
+      nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      .nav-right {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
     </style>
   </head>
   <body>
-    <nav>
-      <div class="nav-right">
-        <span id="who" class="muted"></span>
-        <button onclick="logout()">登出</button>
-      </div>
-    </nav>
+    <div id="app">
+      <nav>
+        <div class="nav-right">
+          <span class="muted" v-if="currentUser.user">
+            登入帳號：{{ currentUser.user }}
+          </span>
+          <button @click="logout">登出</button>
+        </div>
+      </nav>
 
-    <h1>電商購物中心（顧客）</h1>
+      <h1>電商購物中心（顧客）</h1>
 
-    <!-- 商品清單（庫存 > 0；顧客頁不顯示ID與庫存） -->
-    <div class="card">
-      <div style="display: flex; align-items: center; gap: 8px">
-        <h3 style="margin: 0">商品清單</h3>
-        <button onclick="loadProducts()">重新整理</button>
+      <!-- 商品清單 -->
+      <div class="card">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <h3 style="margin: 0">商品清單</h3>
+          <button @click="loadProducts">重新整理</button>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th>商品名稱</th>
+              <th class="right">售價</th>
+              <th class="right">庫存</th>
+              <th class="right">購買數量</th>
+              <th class="right">小計</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loadingProducts">
+              <td colspan="6">載入中…</td>
+            </tr>
+            <tr v-else-if="!products.length">
+              <td colspan="6">目前無可售商品</td>
+            </tr>
+            <tr v-for="p in products" :key="p.productId">
+              <td>
+                <input
+                  type="checkbox"
+                  :checked="!!cart[p.productId]"
+                  @change="onToggleProduct(p, $event)"
+                />
+              </td>
+              <td>{{ p.productName }}</td>
+              <td class="right">{{ fmt(p.price) }}</td>
+              <td class="right">{{ fmt(p.quantity) }}</td>
+              <td class="right">
+                <input
+                  class="qty"
+                  type="number"
+                  min="0"
+                  :max="p.quantity"
+                  step="1"
+                  :value="cart[p.productId]?.qty ?? 0"
+                  :disabled="!cart[p.productId]"
+                  @input="onQtyInput(p, $event)"
+                />
+              </td>
+              <td class="right">
+                {{ fmt(rowSubtotal(p)) }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="muted">
+          提示：勾選商品後可輸入購買數量；購買數量不得大於庫存。
+        </div>
       </div>
-      <table id="prodTable">
-        <thead>
-          <tr>
-            <th></th>
-            <th>商品名稱</th>
-            <th class="right">售價</th>
-            <th class="right">購買數量</th>
-            <th class="right">小計</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-      <div class="muted">提示：勾選商品後可輸入購買數量；購買數量不得大於庫存。</div>
+
+      <!-- 顧客訂單內容 -->
+      <div class="card">
+        <h3>訂單內容</h3>
+        <div class="row">
+          <span class="muted">會員編碼：</span>
+          <strong>{{ currentUser.userId || "（載入中）" }}</strong>
+          <button class="primary" @click="createOrder">建立訂單</button>
+        </div>
+
+        <table v-show="orderItems.length">
+          <thead>
+            <tr>
+              <th>商品</th>
+              <th class="right">單價</th>
+              <th class="right">數量</th>
+              <th class="right">小計</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in orderItems" :key="item.productId">
+              <td>{{ item.productName }}</td>
+              <td class="right">{{ fmt(item.price) }}</td>
+              <td class="right">{{ fmt(item.qty) }}</td>
+              <td class="right">{{ fmt(item.price * item.qty) }}</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3" class="right"><strong>訂單總金額</strong></td>
+              <td class="right">{{ fmt(orderTotal) }}</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div :class="msgClass">{{ msg }}</div>
+      </div>
     </div>
 
-    <!-- 顧客訂單內容（即時計算；memberId 從登入者取得） -->
-    <div class="card">
-      <h3>顧客訂單內容</h3>
-      <div class="row">
-        <span class="muted">會員編碼：</span>
-        <strong id="memberLabel">（載入中）</strong>
-        <button class="primary" onclick="createOrder()">建立訂單</button>
-      </div>
-      <table id="orderTable" style="display: none">
-        <thead>
-          <tr>
-            <th>商品</th>
-            <th class="right">單價</th>
-            <th class="right">數量</th>
-            <th class="right">小計</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-        <tfoot>
-          <tr>
-            <td colspan="3" class="right"><strong>訂單總金額</strong></td>
-            <td class="right" id="orderTotal">0</td>
-          </tr>
-        </tfoot>
-      </table>
-      <div id="orderMsg" class="muted"></div>
-    </div>
+    <!-- Vue 3 CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 
     <script>
-      // 會話中的登入者（從 /api/auth/me 取得）
-      let CURRENT_USER = { role: 'GUEST', user: '' };
+      const { createApp } = Vue;
 
-      // 驗證登入者角色
-        (async function guard() {
-          try {
-            const res = await fetch("/api/auth/me", { credentials: "same-origin" });
-            const me = await res.json(); // { role, user, userId }
-            CURRENT_USER = me || { role: 'GUEST', user: '', userId: '' };
+      createApp({
+        data() {
+          return {
+            currentUser: { role: "GUEST", user: "", userId: "" },
+            products: [],
+            cart: {}, // productId -> { productId, productName, price, stock, qty }
+            loadingProducts: false,
+            msg: "",
+            msgClass: "muted",
+          };
+        },
 
-            if (CURRENT_USER.role !== "CUSTOMER") {
-              location.href = "/login.html";
+        computed: {
+          // 購物車中的項目列表
+          orderItems() {
+            return Object.values(this.cart);
+          },
+          // 訂單總金額
+          orderTotal() {
+            return this.orderItems.reduce(
+              (sum, item) => sum + item.price * item.qty,
+              0
+            );
+          },
+        },
+
+        methods: {
+          fmt(n) {
+            return Number(n || 0).toLocaleString("zh-TW");
+          },
+
+          toast(text, ok = false) {
+            this.msg = text;
+            this.msgClass = ok ? "ok" : "danger";
+            setTimeout(() => {
+              this.msg = "";
+              this.msgClass = "muted";
+            }, 2500);
+          },
+
+          async checkAuth() {
+            try {
+              const res = await fetch("/api/auth/me", {
+                credentials: "same-origin",
+              });
+              const me = await res.json(); // {role, user, userId}
+              this.currentUser = me || {
+                role: "GUEST",
+                user: "",
+                userId: "",
+              };
+
+              if (this.currentUser.role !== "CUSTOMER") {
+                window.location.href = "/login.html";
+                return;
+              }
+
+              // 身分 OK 再載入商品
+              this.loadProducts();
+            } catch (e) {
+              window.location.href = "/login.html";
+            }
+          },
+
+          async logout() {
+            try {
+              await fetch("/api/auth/logout", {
+                method: "POST",
+                credentials: "same-origin",
+              });
+            } catch (e) {
+              // 忽略錯誤
+            }
+            window.location.href = "/login.html";
+          },
+
+          async loadProducts() {
+            this.loadingProducts = true;
+            this.products = [];
+            this.cart = {};
+
+            try {
+              const res = await fetch("/api/products/available", {
+                credentials: "same-origin",
+              });
+              if (!res.ok) throw new Error("讀取商品清單失敗");
+              const data = await res.json();
+              this.products = Array.isArray(data) ? data : [];
+            } catch (err) {
+              this.products = [];
+              this.toast(err.message || "讀取商品清單失敗");
+            } finally {
+              this.loadingProducts = false;
+            }
+          },
+
+          // 勾選 / 取消勾選 商品
+          onToggleProduct(p, event) {
+            const checked = event.target.checked;
+            const id = p.productId;
+
+            if (checked) {
+              // 加入購物車，預設數量 1
+              this.cart[id] = {
+                productId: p.productId,
+                productName: p.productName,
+                price: p.price,
+                stock: p.quantity,
+                qty: this.cart[id]?.qty > 0 ? this.cart[id].qty : 1,
+              };
+              // 若超過庫存，自動壓到庫存上限
+              if (this.cart[id].qty > p.quantity) {
+                this.cart[id].qty = p.quantity;
+              }
+            } else {
+              // 從購物車移除
+              delete this.cart[id];
+            }
+          },
+
+          // 修改數量
+          onQtyInput(p, event) {
+            const id = p.productId;
+            let val = parseInt(event.target.value || "0", 10);
+            if (Number.isNaN(val)) val = 0;
+            if (val < 0) val = 0;
+            if (val > p.quantity) val = p.quantity;
+            event.target.value = val;
+
+            if (val === 0) {
+              // 數量 0 視為取消該商品
+              delete this.cart[id];
+            } else {
+              this.cart[id] = {
+                productId: p.productId,
+                productName: p.productName,
+                price: p.price,
+                stock: p.quantity,
+                qty: val,
+              };
+            }
+          },
+
+          // 每列小計
+          rowSubtotal(p) {
+            const item = this.cart[p.productId];
+            if (!item) return 0;
+            return item.price * item.qty;
+          },
+
+          async createOrder() {
+            const memberId = this.currentUser.userId;
+            if (!memberId) {
+              this.toast("會員資訊異常，請重新登入");
               return;
             }
 
-            document.getElementById("who").textContent = "登入帳號：" + CURRENT_USER.user;
-            document.getElementById("memberLabel").textContent = CURRENT_USER.userId;
+            if (!this.orderItems.length) {
+              this.toast("請先勾選至少一個商品並設定數量");
+              return;
+            }
 
-            loadProducts();
-          } catch (e) {
-            location.href = "/login.html";
-          }
-        })();
-
-      async function logout() {
-        try {
-          await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
-        } catch (e) {}
-        location.href = "/login.html";
-      }
-
-      let products = [];
-      const cart = new Map();
-      const el = (id) => document.getElementById(id);
-      const fmt = (n) => Number(n).toLocaleString("zh-TW");
-      const escapeHtml = (s) =>
-        String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;")
-                 .replaceAll(">", "&gt;").replaceAll('"', "&quot;")
-                 .replaceAll("'", "&#039;");
-
-      function toast(msg, ok = false) {
-        const box = el("orderMsg");
-        box.textContent = msg;
-        box.className = ok ? "ok" : "danger";
-        setTimeout(() => { box.textContent = ""; box.className = "muted"; }, 2500);
-      }
-
-      async function loadProducts() {
-        const tbody = document.querySelector("#prodTable tbody");
-        tbody.innerHTML = '<tr><td colspan="5">載入中…</td></tr>';
-        cart.clear();
-        renderOrderSummary();
-
-        try {
-          const res = await fetch("/api/products/available", { credentials: "same-origin" });
-          if (!res.ok) throw new Error("讀取商品清單失敗");
-          products = await res.json();
-
-          tbody.innerHTML = "";
-          if (!Array.isArray(products) || products.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5">目前無可售商品</td></tr>';
-            return;
-          }
-
-          for (const p of products) {
-            const tr = document.createElement("tr");
-            const checked = cart.has(p.productId);
-            const qty = checked ? cart.get(p.productId).qty : 0;
-
-            tr.innerHTML = `
-              <td><input type="checkbox" data-id="${p.productId}" ${checked ? "checked" : ""}></td>
-              <td>${escapeHtml(p.productName)}</td>
-              <td class="right">${fmt(p.price)}</td>
-              <td class="right">
-                <input class="qty" type="number" min="0" max="${p.quantity}" step="1"
-                       data-qty="${p.productId}" value="${qty}" ${checked ? "" : "disabled"}>
-              </td>
-              <td class="right" data-sub="${p.productId}">${checked ? fmt(p.price * qty) : "0"}</td>
-            `;
-
-            // 勾選切換
-            tr.querySelector('input[type="checkbox"]').addEventListener("change", (e) => {
-              const id = e.target.getAttribute("data-id");
-              const rowQty = tr.querySelector(`input[data-qty="${id}"]`);
-              if (e.target.checked) {
-                rowQty.disabled = false;
-                if (!cart.has(id)) {
-                  cart.set(id, {
-                    productId: p.productId,
-                    productName: p.productName,
-                    price: p.price,
-                    stock: p.quantity,
-                    qty: 1,
-                  });
-                  rowQty.value = 1;
-                }
-              } else {
-                rowQty.disabled = true;
-                rowQty.value = 0;
-                cart.delete(id);
+            // 檢查庫存
+            for (const item of this.orderItems) {
+              if (item.qty > item.stock) {
+                this.toast("商品數量超過庫存");
+                return;
               }
-              updateRowSubtotal(p.productId);
-              renderOrderSummary();
-            });
+            }
 
-            // 數量變更
-            tr.querySelector(`input[data-qty="${p.productId}"]`).addEventListener("input", (e) => {
-              const val = parseInt(e.target.value || "0", 10);
-              const max = parseInt(e.target.getAttribute("max"), 10);
-              if (val < 0) e.target.value = 0;
-              if (val > max) e.target.value = max;
+            const items = this.orderItems.map((x) => ({
+              productId: x.productId,
+              quantity: x.qty,
+              price: x.price,
+            }));
 
-              const qtyNow = parseInt(e.target.value || "0", 10);
-              if (qtyNow === 0) {
-                cart.delete(p.productId);
-                tr.querySelector('input[type="checkbox"]').checked = false;
-                e.target.disabled = true;
-              } else {
-                cart.set(p.productId, {
-                  productId: p.productId,
-                  productName: p.productName,
-                  price: p.price,
-                  stock: p.quantity,
-                  qty: qtyNow,
-                });
+            const body = { memberId, items };
+
+            try {
+              const res = await fetch("/api/orders", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify(body),
+              });
+              if (!res.ok) {
+                const txt = await res.text().catch(() => "");
+                throw new Error(txt || "建立訂單失敗");
               }
-              updateRowSubtotal(p.productId);
-              renderOrderSummary();
-            });
+              const orderId = await res.text();
+              this.toast(`✅ 建立成功，OrderID: ${orderId}`, true);
+              this.cart = {};
+              this.loadProducts();
+            } catch (err) {
+              this.toast("❌ " + (err.message || "建立訂單失敗"));
+            }
+          },
+        },
 
-            tbody.appendChild(tr);
-          }
-        } catch (err) {
-          tbody.innerHTML = `<tr><td colspan="5" class="danger">${escapeHtml(err.message)}</td></tr>`;
-        }
-      }
-
-      function updateRowSubtotal(productId) {
-        const item = cart.get(productId);
-        const td = document.querySelector(`[data-sub="${CSS.escape(productId)}"]`);
-        if (!td) return;
-        td.textContent = item ? fmt(item.price * item.qty) : "0";
-      }
-
-      function renderOrderSummary() {
-        const table = el("orderTable");
-        const tbody = table.querySelector("tbody");
-        tbody.innerHTML = "";
-        let total = 0;
-
-        for (const item of cart.values()) {
-          const sub = item.price * item.qty;
-          total += sub;
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td>${escapeHtml(item.productName)}</td>
-            <td class="right">${fmt(item.price)}</td>
-            <td class="right">${fmt(item.qty)}</td>
-            <td class="right">${fmt(sub)}</td>
-          `;
-          tbody.appendChild(tr);
-        }
-        el("orderTotal").textContent = fmt(total);
-        table.style.display = cart.size ? "" : "none";
-      }
-
-      async function createOrder() {
-        const memberId = CURRENT_USER.userId;
-        if (cart.size === 0) { toast("請先勾選至少一個商品並設定數量"); return; }
-        for (const x of cart.values()) {
-          if (x.qty > x.stock) { toast(`商品數量超過庫存`); return; }
-        }
-        
-
-        const items = Array.from(cart.values()).map(x => ({
-          productId: x.productId,
-          quantity: x.qty,
-          price: x.price,
-        }));
-        const body = { memberId, items };
-
-        try {
-          const res = await fetch("/api/orders", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "same-origin",
-            body: JSON.stringify(body),
-          });
-          if (!res.ok) {
-            const txt = await res.text().catch(() => "");
-            throw new Error(txt || "建立訂單失敗");
-          }
-          const orderId = await res.text();
-          toast(`✅ 建立成功，OrderID: ${orderId}`, true);
-          cart.clear();
-          renderOrderSummary();
-          await loadProducts();
-        } catch (err) {
-          toast("❌ " + (err.message || "建立訂單失敗"));
-        }
-      }
+        mounted() {
+          this.checkAuth();
+        },
+      }).mount("#app");
     </script>
   </body>
 </html>

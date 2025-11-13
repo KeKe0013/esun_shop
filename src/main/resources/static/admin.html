@@ -60,113 +60,161 @@
     </style>
   </head>
   <body>
-    <nav>
-      <div class="nav-right">
-        <span id="who" class="muted"></span>
-        <button onclick="logout()">登出</button>
-      </div>
-    </nav>
+    <div id="app">
+      <nav>
+        <div class="nav-right">
+          <span class="muted" v-if="currentUser.user">
+            登入帳號：{{ currentUser.user }}
+          </span>
+          <button @click="logout">登出</button>
+        </div>
+      </nav>
 
-    <h1>電商購物中心（管理員）</h1>
+      <h1>電商購物中心（管理員）</h1>
 
-    <!-- 區塊：新增商品（僅保留此區塊） -->
-    <div class="card">
-      <h3>新增商品</h3>
-      <div class="row">
-        <label>商品編號</label><input id="pId" placeholder="例如 P004" />
-        <label>商品名稱</label
-        ><input id="pName" placeholder="例如 精品咖啡禮盒" /> <label>售價</label
-        ><input id="pPrice" type="number" min="0" step="1" /> <label>庫存</label
-        ><input id="pQty" type="number" min="0" step="1" />
-        <button class="primary" onclick="addProduct()">新增商品</button>
+      <!-- 區塊：新增商品 -->
+      <div class="card">
+        <h3>新增商品</h3>
+        <div class="row">
+          <label>商品編號</label>
+          <input
+            v-model.trim="form.productId"
+            placeholder="例如 P004"
+          />
+
+          <label>商品名稱</label>
+          <input
+            v-model.trim="form.productName"
+            placeholder="例如 精品咖啡禮盒"
+          />
+
+          <label>售價</label>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            v-model.number="form.price"
+          />
+
+          <label>庫存</label>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            v-model.number="form.quantity"
+          />
+
+          <button class="primary" @click="addProduct">新增商品</button>
+        </div>
+        <div :class="msgClass">{{ msg }}</div>
       </div>
-      <div id="addMsg" class="muted"></div>
     </div>
 
+    <!-- Vue 3 CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+
     <script>
-      // 角色守門：非 ADMIN 或未登入 → 導回登入頁
-      (async function guard() {
-        try {
-          const res = await fetch("/api/auth/me", {
-            credentials: "same-origin",
-          });
-          const me = await res.json(); // {role:"ADMIN"|"CUSTOMER"|"GUEST"}
-          if (me.role !== "ADMIN") location.href = "/login.html";
-          // 顯示誰在登入（若你有在 session 放 USER）
-          try {
-            const u = me.user || ""; // 若後端未回傳可略過
-            if (u)
-              document.getElementById("who").textContent = "登入帳號：" + u;
-          } catch {}
-        } catch (e) {
-          location.href = "/login.html";
-        }
-      })();
+      const { createApp } = Vue;
 
-      async function logout() {
-        try {
-          await fetch("/api/auth/logout", {
-            method: "POST",
-            credentials: "same-origin",
-          });
-        } catch (e) {}
-        // 無論是否成功，都導回登入頁
-        location.href = "/login.html";
-      }
+      createApp({
+        data() {
+          return {
+            currentUser: { role: "GUEST", user: "" },
+            form: {
+              productId: "",
+              productName: "",
+              price: 0,
+              quantity: 0,
+            },
+            msg: "",
+            msgClass: "muted",
+          };
+        },
 
-      function el(id) {
-        return document.getElementById(id);
-      }
+        methods: {
+          toast(text, ok = false) {
+            this.msg = text;
+            this.msgClass = ok ? "ok" : "danger";
+            setTimeout(() => {
+              this.msg = "";
+              this.msgClass = "muted";
+            }, 2500);
+          },
 
-      // 僅保留新增商品功能
-      async function addProduct() {
-        const id = el("pId").value.trim();
-        const name = el("pName").value.trim();
-        const price = parseInt(el("pPrice").value || "0", 10);
-        const qty = parseInt(el("pQty").value || "0", 10);
-        const msg = el("addMsg");
+          async checkAuth() {
+            try {
+              const res = await fetch("/api/auth/me", {
+                credentials: "same-origin",
+              });
+              const me = await res.json(); // {role, user, userId?}
+              this.currentUser = me || { role: "GUEST", user: "" };
 
-        if (!id || !name) {
-          msg.textContent = "請輸入商品編號與名稱";
-          msg.className = "danger";
-          return;
-        }
-        if (price < 0 || qty < 0) {
-          msg.textContent = "售價與庫存不可為負數";
-          msg.className = "danger";
-          return;
-        }
+              if (this.currentUser.role !== "ADMIN") {
+                window.location.href = "/login.html";
+              }
+            } catch (e) {
+              window.location.href = "/login.html";
+            }
+          },
 
-        try {
-          const res = await fetch("/api/products", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              productId: id,
-              productName: name,
-              price,
-              quantity: qty,
-            }),
-            credentials: "same-origin",
-          });
-          if (!res.ok) throw new Error("新增商品失敗");
+          async logout() {
+            try {
+              await fetch("/api/auth/logout", {
+                method: "POST",
+                credentials: "same-origin",
+              });
+            } catch (e) {
+              // ignore
+            }
+            window.location.href = "/login.html";
+          },
 
-          msg.textContent = "✅ 新增成功";
-          msg.className = "ok";
-          el("pId").value = "";
-          el("pName").value = "";
-          el("pPrice").value = "";
-          el("pQty").value = "";
-        } catch (err) {
-          msg.textContent = "❌ " + (err.message || "新增商品失敗");
-          msg.className = "danger";
-        } finally {
-          setTimeout(() => {
-            msg.textContent = "";
-            msg.className = "muted";
-          }, 2500);
-        }
-      }
+          async addProduct() {
+            const { productId, productName, price, quantity } = this.form;
+
+            if (!productId || !productName) {
+              this.toast("請輸入商品編號與名稱");
+              return;
+            }
+            if (price < 0 || quantity < 0) {
+              this.toast("售價與庫存不可為負數");
+              return;
+            }
+
+            try {
+              const res = await fetch("/api/products", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({
+                  productId,
+                  productName,
+                  price,
+                  quantity,
+                }),
+              });
+
+              if (!res.ok) {
+                const t = await res.text().catch(() => "");
+                throw new Error(t || "新增商品失敗");
+              }
+
+              this.toast("✅ 新增成功", true);
+              // 清空表單
+              this.form.productId = "";
+              this.form.productName = "";
+              this.form.price = 0;
+              this.form.quantity = 0;
+            } catch (err) {
+              this.toast("❌ " + (err.message || "新增商品失敗"));
+            }
+          },
+        },
+
+        mounted() {
+          this.checkAuth();
+        },
+      }).mount("#app");
     </script>
   </body>
 </html>
