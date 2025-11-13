@@ -174,18 +174,17 @@ sp_create_order_header： 建立訂單主檔
 sp_add_item_update_stock： 新增訂單明細並扣庫存
 usp_CreateUser： 建立使用者
 
-API 說明
-Method Path 功能
-POST /api/auth/login 使用者登入
-POST /api/auth/register 註冊新帳號
-POST /api/auth/logout 登出
-GET /api/auth/me 取得登入者資訊
+API說明
+Method      Path                    功能
+POST        /api/auth/login         使用者登入
+POST        /api/auth/register      註冊新帳號
+POST        /api/auth/logout        登出
+GET         /api/auth/me            取得登入者資訊
 
-GET /api/products/available 顧客取得可售商品
-POST /api/products 管理員新增商品
+GET         /api/products/available 顧客取得可售商品
+POST        /api/products           管理員新增商品
 
-POST /api/orders 顧客建立訂單
-
-```
+POST        /api/orders             顧客建立訂單
 
 ```
+
